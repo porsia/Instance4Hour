@@ -14,87 +14,7 @@ using Newtonsoft.Json;
 
 namespace ConsoleApplication2
 {
-    public class UserVisitInfo
-    {
-        string userid;
-        string url;
-        int type;
-        string lastVisitTime;
-        string guid;
-        string mobile;
-        string referrerUrl;  //: "http://so.360.cn/s?ie=utf-8&src=hao_search&_re=0&q=%E6%AF%8D%E5%A9%B4%E4%B9%8B%E5%AE%B6"
-
-        string referrerType;
-        string spent;
-        string catename;
-
-        public string Catename
-        {
-            get { return catename; }
-            set { catename = value; }
-        }
-
-        public string Spent
-        {
-            get { return spent; }
-            set { spent = value; }
-        }
-        public string ReferrerType
-        {
-            get { return referrerType; }
-            set { referrerType = value; }
-        }
-
-
-        public string ReferrerUrl
-        {
-            get { return referrerUrl; }
-            set { referrerUrl = value; }
-        }
-
-        public string Mobile
-        {
-            get { return mobile; }
-            set { mobile = value; }
-        }
-
-        public string Userid
-        {
-            get { return userid; }
-            set { userid = value; }
-        }
-      
-
-        public string Guid
-        {
-            get { return guid; }
-            set { guid = value; }
-        }
-       
-
-        public string Url
-        {
-            get { return url; }
-            set { url = value; }
-        }
-
-    
-
-        public string LastVisitTime
-        {
-            get { return lastVisitTime; }
-            set { lastVisitTime = value; }
-        }
-
-      
-
-        public int Type
-        {
-            get { return type; }
-            set { type = value; }
-        }
-        
-    }
+   
 
     class Program
     {
@@ -107,10 +27,9 @@ namespace ConsoleApplication2
             //数据读取完毕退出
              Console.WriteLine("开始分析数据:");
 
-             for (int mi = -1; mi < 1; mi++)
-             {
+          
                  Int64 maxVisitID = 0;
-                 string dtStr = DateTime.Now.AddDays(mi).ToShortDateString();
+                 string dtStr = DateTime.Now.ToShortDateString();
 
                  bool exitFlag = false;
                  for (int run = 0; run < int.MaxValue; run++)
@@ -146,32 +65,15 @@ namespace ConsoleApplication2
                                  maxVisitID = Convert.ToInt64(qcount["idVisit"]) > maxVisitID ? maxVisitID : Convert.ToInt64(qcount["idVisit"]);
 
                              string lastActionDateTime = qcount["serverDate"].ToString() + " " + qcount["serverTimePretty"].ToString();
-                             if (mi == 0)
-                             {
-                                 if (Convert.ToDateTime(lastActionDateTime) > DateTime.Parse(DateTime.Now.ToShortDateString()).AddHours(9))
+                            
+                                 if (Convert.ToDateTime(lastActionDateTime) <DateTime.Now.AddHours(-4))
                                  {
-                                   //  exitFlag = true;
+                                      exitFlag = true;
                                      continue;
 
                                  }
-                                 else if(Convert.ToDateTime(lastActionDateTime) < DateTime.Parse(DateTime.Now.ToShortDateString()))
-                                 {
-                                     exitFlag = true;
-                                     continue;
-                                 }
-                                       
-                             }
-
-                             if (mi == -1)
-                             {
-                                 if (Convert.ToDateTime(lastActionDateTime) < DateTime.Parse(DateTime.Now.AddDays(-1).ToShortDateString()).AddHours(16))
-                                 {
-                                     exitFlag = true;
-                                     continue;
-
-                                 }
-
-                             }
+                           
+                      
                              string referrerUrl = "";
 
                              string referrerType = "";
@@ -251,11 +153,11 @@ namespace ConsoleApplication2
                          }
 
                      }
-                 }
+               
 
                      #endregion
-             }
-         
+                 }
+            
             userList = userList.Distinct().OrderByDescending(c=>c.Catename).ToList();
             CreateReport(userList);
             writeLog( writeFile,userList);
@@ -328,24 +230,32 @@ namespace ConsoleApplication2
 
         public static void CreateReport(List<UserVisitInfo> u)
         {
-            string body="<html><body><H3>前一天16:00 到今天9:00数据报表click.muyingzhijia.com</H3>";
+            string body = "<html><body><H3>4小时内数据报表click.muyingzhijia.com</H3>";
 
-            string head = " <H3>高毛利商品报表</H3><table border = 1>   <tr>     <th> 会员号 </th> <th>手机号  </th><th>分类名称</th><th> 浏览商品 </th>  <th> 浏览时间</th><th> 浏览时长</th></tr>";
-                foreach (UserVisitInfo a in u)
+            List<string> cateNames = u.Select(c => c.Catename).Distinct().ToList();
+            for (int i = 0; i < cateNames.Count; i++)
+            {
+                string head = " <H3>" + cateNames[i] + "</H3><table border = 1>   <tr>     <th> 会员号 </th> <th>手机号  </th><th> 浏览商品 </th>  <th> 浏览时间</th></tr>";
+                foreach (UserVisitInfo a in u.Where(c => c.Catename ==cateNames[i]))
                 {
-                    head += ("<tr><td>" + a.Userid + "</td><td>" + a.Mobile + "</td><td>" + a.Catename + "</td><td>" + a.Url + "</td><td>" + a.LastVisitTime + "</td><td>" + a.Spent + "</td> </tr>");//开始写入值
+                    head += ("<tr><td>" + a.Userid + "</td><td>" + a.Mobile + "</td><td>" + a.Url + "</td><td>" + a.LastVisitTime + "</td><td></tr>");//开始写入值
 
                 }
 
                 head += "</table>";
                 body += head;
-                body+="</body></html>";
+            }
+            body += "</body></html>";
 
-                EmailServiceClient esc = new  EmailServiceClient();
-                esc.Open();
-                 //   esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "前一天16:00 到今天9:00数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
-                esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "前一天16:00 到今天9:00数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
-                esc.Close();
+
+ 
+            EmailServiceClient esc = new EmailServiceClient();
+            esc.Open();
+            //   esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "前一天16:00 到今天9:00数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
+            esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "4小时内数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
+            esc.Close();
+
+          
         }
 
 
