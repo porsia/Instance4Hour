@@ -252,7 +252,7 @@ namespace ConsoleApplication2
             EmailServiceClient esc = new EmailServiceClient();
             esc.Open();
             //   esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "前一天16:00 到今天9:00数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
-            esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "4小时内数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
+            esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "4小时内数据报表click.muyingzhijia.com", MailTo = ("yxw1309@muyingzhijia.com;wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
             esc.Close();
 
           
