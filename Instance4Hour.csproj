@@ -8,8 +8,8 @@
     <ProjectGuid>{3F9D6F94-3F75-4325-AC2F-72AC01C1248C}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>ConsoleApplication2</RootNamespace>
-    <AssemblyName>ConsoleApplication2</AssemblyName>
+    <RootNamespace>Instance4Hour</RootNamespace>
+    <AssemblyName>Instance4Hour</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -119,9 +119,6 @@
       <LastGenOutput>Holyca.designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
     </None>
-    <None Include="Service References\PromotionReference\ConsoleApplication2.PromotionReference.PromotionResponse.datasource">
-      <DependentUpon>Reference.svcmap</DependentUpon>
-    </None>
     <None Include="Service References\PromotionReference\Reference.svcmap">
       <Generator>WCF Proxy Generator</Generator>
       <LastGenOutput>Reference.cs</LastGenOutput>
@@ -158,6 +155,7 @@
     <None Include="Bbhome.dbml.layout">
       <DependentUpon>Bbhome.dbml</DependentUpon>
     </None>
+    <None Include="Properties\DataSources\Boodoll.WCFProvider.PromotionReference.PromotionResponse.datasource" />
   </ItemGroup>
   <ItemGroup>
     <WebReferences Include="Web References\" />

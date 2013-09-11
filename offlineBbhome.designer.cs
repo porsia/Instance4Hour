@@ -9,7 +9,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleApplication2
+namespace Instance4Hour
 {
 	using System.Data.Linq;
 	using System.Data.Linq.Mapping;
@@ -33,7 +33,7 @@ namespace ConsoleApplication2
     #endregion
 		
 		public offlineBbhomeDataContext() : 
-				base(global::ConsoleApplication2.Properties.Settings.Default.offLineBBHomeConnectionString, mappingSource)
+				base(global::Instance4Hour.Properties.Settings.Default.offLineBBHomeConnectionString, mappingSource)
 		{
 			OnCreated();
 		}
@@ -62,14 +62,6 @@ namespace ConsoleApplication2
 			OnCreated();
 		}
 		
-		public System.Data.Linq.Table<Ga_guidUserID> Ga_guidUserIDs
-		{
-			get
-			{
-				return this.GetTable<Ga_guidUserID>();
-			}
-		}
-		
 		public System.Data.Linq.Table<ob_v_visitreport> ob_v_visitreports
 		{
 			get
@@ -77,49 +69,12 @@ namespace ConsoleApplication2
 				return this.GetTable<ob_v_visitreport>();
 			}
 		}
-	}
-	
-	[Table(Name="dbo.Ga_guidUserID")]
-	public partial class Ga_guidUserID
-	{
 		
-		private int _uid;
-		
-		private string _guid;
-		
-		public Ga_guidUserID()
-		{
-		}
-		
-		[Column(Storage="_uid", DbType="Int NOT NULL")]
-		public int uid
+		public System.Data.Linq.Table<Ga_guidUserID> Ga_guidUserIDs
 		{
 			get
 			{
-				return this._uid;
-			}
-			set
-			{
-				if ((this._uid != value))
-				{
-					this._uid = value;
-				}
-			}
-		}
-		
-		[Column(Storage="_guid", DbType="VarChar(50) NOT NULL", CanBeNull=false)]
-		public string guid
-		{
-			get
-			{
-				return this._guid;
-			}
-			set
-			{
-				if ((this._guid != value))
-				{
-					this._guid = value;
-				}
+				return this.GetTable<Ga_guidUserID>();
 			}
 		}
 	}
@@ -182,6 +137,51 @@ namespace ConsoleApplication2
 				if ((this._productName != value))
 				{
 					this._productName = value;
+				}
+			}
+		}
+	}
+	
+	[Table(Name="dbo.Ga_guidUserID")]
+	public partial class Ga_guidUserID
+	{
+		
+		private int _uid;
+		
+		private string _guid;
+		
+		public Ga_guidUserID()
+		{
+		}
+		
+		[Column(Storage="_uid", DbType="Int NOT NULL")]
+		public int uid
+		{
+			get
+			{
+				return this._uid;
+			}
+			set
+			{
+				if ((this._uid != value))
+				{
+					this._uid = value;
+				}
+			}
+		}
+		
+		[Column(Storage="_guid", DbType="VarChar(50) NOT NULL", CanBeNull=false)]
+		public string guid
+		{
+			get
+			{
+				return this._guid;
+			}
+			set
+			{
+				if ((this._guid != value))
+				{
+					this._guid = value;
 				}
 			}
 		}

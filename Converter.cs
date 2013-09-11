@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace ConsoleApplication2
+namespace Instance4Hour
 {
 
     /// <summary>

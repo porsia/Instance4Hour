@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleApplication2.Properties {
+namespace Instance4Hour.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]

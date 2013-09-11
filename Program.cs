@@ -6,13 +6,11 @@ using System.Text.RegularExpressions;
 using System.IO;
 using System.Web;
 using System.Net;
-
-
-
+using System.Net.Mail;
 using Boodoll.PageBL;
 using Newtonsoft.Json;
 
-namespace ConsoleApplication2
+namespace Instance4Hour
 {
    
 
@@ -20,15 +18,87 @@ namespace ConsoleApplication2
     {
 
         public static  List<ob_v_visitreport> allProductName = getAllProductIDName();
+        public static int BeforeHour = int.Parse(System.Configuration.ConfigurationSettings.AppSettings["beforeHour"].ToString());
+        public static int intent = 30;
+
+        public static void getVisitByHour()
+        {
+            string writeFile = string.Format("{0}\\result{1}.txt", System.Threading.Thread.GetDomain().BaseDirectory, DateTime.Now.ToFileTimeUtc().ToString());
+         
+            Dictionary<string, string> productVisit = new Dictionary<string, string>();
+            for (int run = BeforeHour; run < 0; run++)
+            {
+                string dtStr = DateTime.Now.AddDays(run).ToShortDateString();
+                string url = "http://10.0.0.131:920/index.php?module=API&method=VisitTime.getVisitInformationPerServerTime&format=JSON&idSite=1&period=day&date="+dtStr+"&expanded=1&idGoal=ecommerceOrder&filter_limit=1000&token_auth=453170c79e8f0ad5dcd1f0b2ce1ecf23";
+
+
+                string xml = Boodoll.PageBL.ProductSearch.ProductSearchBLL.GetHtml(url, Encoding.GetEncoding("GB2312"));
+                xml = xml.Replace("\\u", "\\\\u");
+                       Newtonsoft.Json.JavaScriptArray jsonObject = (Newtonsoft.Json.JavaScriptArray)Newtonsoft.Json.JavaScriptConvert.DeserializeObject(xml);
+
+                     int count = jsonObject.Count();
+                     for (int i = 0; i < count; i++)
+                     {
+                         
+                             JavaScriptObject qcount = (JavaScriptObject)jsonObject[i];
+                             string name =dtStr+"--"+UnicodeToString(qcount["label"].ToString());
+
+
+                             productVisit.Add(name, qcount["nb_conversions"].ToString());
+
+                     }
+            }
+            writeLog(writeFile,productVisit);
+
+
+       }
+
+        public static string UnicodeToString(string text)
+        {
+            MatchCollection mc = Regex.Matches(text, "([\\w]+)|(\\\\u([\\w]{4}))");
+            if (mc != null && mc.Count > 0)
+            {
+                StringBuilder sb = new StringBuilder();
+                foreach (Match m2 in mc)
+                {
+                    string v = m2.Value;
+                    if (v.StartsWith("\\u"))
+                    {
+                        string word = v.Substring(2);
+                        byte[] codes = new byte[2];
+                        int code = Convert.ToInt32(word.Substring(0, 2), 16);
+                        int code2 = Convert.ToInt32(word.Substring(2), 16);
+                        codes[0] = (byte)code2;
+                        codes[1] = (byte)code;
+                        sb.Append(Encoding.Unicode.GetString(codes));
+                    }
+                    else
+                    {
+                        sb.Append(v);
+                    }
+                }
+                return sb.ToString();
+            }
+            else
+            {
+                return text;
+            }
+        }
         static void Main(string[] args)
         {
+            //getVisitByHour();
+
+            //return;
            List<UserVisitInfo> userList = new List<UserVisitInfo>();
+          
            string writeFile = string.Format("{0}\\result{1}.txt", System.Threading.Thread.GetDomain().BaseDirectory, DateTime.Now.ToFileTimeUtc().ToString());
             //数据读取完毕退出
              Console.WriteLine("开始分析数据:");
 
           
                  Int64 maxVisitID = 0;
+
+
                  string dtStr = DateTime.Now.ToShortDateString();
 
                  bool exitFlag = false;
@@ -42,7 +112,12 @@ namespace ConsoleApplication2
                          break;
                      }
 
-                     string url = "http://click.muyingzhijia.com/index.php?module=API&filter_limit=100&method=Live.getLastVisitsDetails&format=json&idSite=1&period=day&date=" + dtStr + "&expanded=1&token_auth=453170c79e8f0ad5dcd1f0b2ce1ecf23";
+                     //filter_limit=200&filter_offset=100
+
+                     int filter_limit = intent*(run+1);
+                     int filter_offset = intent * run;
+
+                     string url = "http://10.0.0.131:920/index.php?module=API&filter_limit=" + filter_limit + "&filter_offset=" + filter_offset + "&method=Live.getLastVisitsDetails&format=json&idSite=1&period=day&date=" + dtStr + "&expanded=1&token_auth=453170c79e8f0ad5dcd1f0b2ce1ecf23";
 
                      if (maxVisitID > 0)
                          url = url + "&maxIdVisit=" + maxVisitID;
@@ -66,7 +141,7 @@ namespace ConsoleApplication2
 
                              string lastActionDateTime = qcount["serverDate"].ToString() + " " + qcount["serverTimePretty"].ToString();
                             
-                                 if (Convert.ToDateTime(lastActionDateTime) <DateTime.Now.AddHours(-4))
+                                 if (Convert.ToDateTime(lastActionDateTime) <DateTime.Now.AddHours(day))
                                  {
                                       exitFlag = true;
                                      continue;
@@ -153,7 +228,6 @@ namespace ConsoleApplication2
                          }
 
                      }
-               
 
                      #endregion
                  }
@@ -162,7 +236,7 @@ namespace ConsoleApplication2
             CreateReport(userList);
             writeLog( writeFile,userList);
             Console.WriteLine("数据生成完毕");
-            Console.ReadLine();
+           
         }
 
    
@@ -170,10 +244,7 @@ namespace ConsoleApplication2
         public static string CreatePID(string url)
         {
             
-            url = url.ToLower();
-
-          
-           
+               url = url.ToLower();
                 string Pattern = "pdtid=[0-9]*"; // @"pdtID";
                 MatchCollection Matches = Regex.Matches(url, Pattern, RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture);
 
@@ -203,19 +274,19 @@ namespace ConsoleApplication2
         {
             string result = "";
             int uid = -1;
-            Converter.ParseInt(usrid, -1);
+           uid= Converter.ParseInt(usrid, -1);
 
-             
-            if (uid < 0)
-            {
-                offlineBbhomeDataContext octx = new offlineBbhomeDataContext();
-                if (octx.Ga_guidUserIDs.Any(c => c.guid == guid))
-                {
-                    uid = octx.Ga_guidUserIDs.FirstOrDefault(c => c.guid == guid).uid;
-                }
 
-              
-            }
+           if (uid < 0)
+           {
+               offlineBbhomeDataContext octx = new offlineBbhomeDataContext();
+               if (octx.Ga_guidUserIDs.Any(c => c.guid == guid))
+               {
+                   uid = octx.Ga_guidUserIDs.FirstOrDefault(c => c.guid == guid).uid;
+               }
+
+
+           }
 
               if (uid > 0)
                 {
@@ -228,34 +299,122 @@ namespace ConsoleApplication2
         }
 
 
-        public static void CreateReport(List<UserVisitInfo> u)
+        public static void CreateReport(List<UserVisitInfo> au)
         {
-            string body = "<html><body><H3>4小时内数据报表click.muyingzhijia.com</H3>";
+            string title=Math.Abs(day) + "小时内数据报表click.muyingzhijia.com";
+            List<UserVisitInfo> u1 = au.Where(c => c.Catename == "合生元").ToList();
+            List<UserVisitInfo> u2 = au.Where(c => !u1.Any(u => u.Userid == c.Userid)).ToList();
 
+
+            List<string> sendto1 = System.Configuration.ConfigurationSettings.AppSettings["sendto1"].ToString().Split(';').ToList();
+
+            List<string> sendto2 = System.Configuration.ConfigurationSettings.AppSettings["sendto2"].ToString().Split(';').ToList();
+
+            SendMail(sendto1,title , createBody(u1));
+            SendMail(sendto2, title, createBody(u2));
+ 
+            //EmailServiceClient esc = new EmailServiceClient();
+            //esc.Open();
+            ////   esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "前一天16:00 到今天9:00数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
+            //esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "4小时内数据报表click.muyingzhijia.com", MailTo = ("yxw1309@muyingzhijia.com;wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
+            //esc.Close();
+
+          
+        }
+
+        public static string createBody(List<UserVisitInfo> u)
+        {
+            string bd = "<html><body><H3>" + Math.Abs(day) + "小时内数据报表click.muyingzhijia.com</H3>";
             List<string> cateNames = u.Select(c => c.Catename).Distinct().ToList();
             for (int i = 0; i < cateNames.Count; i++)
             {
                 string head = " <H3>" + cateNames[i] + "</H3><table border = 1>   <tr>     <th> 会员号 </th> <th>手机号  </th><th> 浏览商品 </th>  <th> 浏览时间</th></tr>";
-                foreach (UserVisitInfo a in u.Where(c => c.Catename ==cateNames[i]))
+                foreach (UserVisitInfo a in u.Where(c => c.Catename == cateNames[i]))
                 {
-                    head += ("<tr><td>" + a.Userid + "</td><td>" + a.Mobile + "</td><td>" + a.Url + "</td><td>" + a.LastVisitTime + "</td><td></tr>");//开始写入值
+                    head += ("<tr><td>" + a.Userid + "</td><td>" + a.Mobile + "</td><td>" + a.Url.Replace("'", "") + "</td><td>" + a.LastVisitTime + "</td><td></tr>");//开始写入值
 
                 }
-
                 head += "</table>";
-                body += head;
+                bd += head;
             }
-            body += "</body></html>";
+            bd += "</body></html>";
+
+            return bd;
+        }
 
 
- 
-            EmailServiceClient esc = new EmailServiceClient();
-            esc.Open();
-            //   esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "前一天16:00 到今天9:00数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
-            esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "4小时内数据报表click.muyingzhijia.com", MailTo = ("yxw1309@muyingzhijia.com;wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
-            esc.Close();
+        /// <summary>
+        /// 发送邮件，邮件内容大小无限制，比较灵活，但有可能被163、sin等邮箱屏蔽掉
+        /// </summary>
+        /// <param name="lstMail">邮件体，可多个</param>
+        /// <param name="sendAddress">发送人</param>
+        /// <param name="sendPwd">邮件标题</param>
+        /// <param name="name">名称</param>
+        /// <param name="msg">异常信息</param>
+        /// <returns></returns>
+        public static bool SendMail(List<string> lstMail, string subject, string body)
+        {
 
-          
+            // <add key="sendMail" value="mybaby@muyingzhijia.com,mybaby,mybb@)!),222.66.166.253" />
+            string sendAddress = "mybaby@muyingzhijia.com";
+            string sendPwd = "mybb@)!)";
+            string name = "母婴之家";
+            try
+            {
+                SmtpClient smtp = new SmtpClient();
+                smtp.Host = "mail.muyingzhijia.com";
+                smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
+                smtp.Credentials = new NetworkCredential(sendAddress, sendPwd);
+
+               
+                        MailMessage mail = new MailMessage();
+                        mail.From = new MailAddress(sendAddress, name);
+
+                        if (lstMail != null && lstMail.Count > 0)
+                        {
+                            foreach (var item in lstMail)
+                            {
+                                if(!string.IsNullOrEmpty(item))
+                                mail.To.Add(new MailAddress(item));
+                            }
+                        }
+                   
+                        mail.Subject = subject;
+                        mail.Body = body;
+                        mail.SubjectEncoding = Encoding.UTF8;
+                        mail.BodyEncoding = Encoding.UTF8;
+                        mail.IsBodyHtml = true;
+                        smtp.Send(mail);
+
+                        return true;
+            }
+            catch (Exception ex)
+            {
+               
+                return false;
+            }
+        }
+
+        public static void writeLog(string writeFile,Dictionary<string,string> u)
+        {
+            try
+            {
+                FileStream fs = new FileStream(writeFile, FileMode.OpenOrCreate, FileAccess.Write);
+                StreamWriter wr = new StreamWriter(fs);
+
+                foreach (KeyValuePair<string,string> a in u)
+                {
+                    wr.WriteLine(a.Key + "," + a.Value);//开始写入值
+
+
+                }
+                wr.Flush();
+
+                wr.Close();
+                fs.Close();
+            }
+            catch
+            { }
         }
 
 
@@ -269,7 +428,9 @@ namespace ConsoleApplication2
 
                 foreach (UserVisitInfo a in u)
                 {
-                    wr.WriteLine(a.Userid + "," + a.Guid + "," + a.Url + "," + a.ReferrerType + "," + a.ReferrerUrl + "," + a.LastVisitTime);//开始写入值
+                    wr.WriteLine(a.Userid + "," +a.Mobile + "," + a.Url + "," + a.LastVisitTime);//开始写入值
+
+         
                 }
                 wr.Flush();
 
@@ -282,7 +443,8 @@ namespace ConsoleApplication2
 
         public static List<ob_v_visitreport> getAllProductIDName()
         {
-            return new offlineBbhomeDataContext().ob_v_visitreports.Distinct().ToList();
+               return new offlineBbhomeDataContext().ob_v_visitreports.Distinct().ToList();
+       
              //var q=new offlineBbhomeDataContext().ob_v_visitreports.Distinct().ToList();
          
              //  Dictionary<int, string> dics = new Dictionary<int, string>();

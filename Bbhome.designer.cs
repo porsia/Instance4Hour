@@ -9,7 +9,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleApplication2
+namespace Instance4Hour
 {
 	using System.Data.Linq;
 	using System.Data.Linq.Mapping;
@@ -36,7 +36,7 @@ namespace ConsoleApplication2
     #endregion
 		
 		public BbhomeDataContext() : 
-				base(global::ConsoleApplication2.Properties.Settings.Default.bbHomeConnectionString, mappingSource)
+				base(global::Instance4Hour.Properties.Settings.Default.bbHomeConnectionString, mappingSource)
 		{
 			OnCreated();
 		}
