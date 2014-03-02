@@ -8,609 +8,480 @@ using System.Web;
 using System.Net;
 using System.Net.Mail;
 using Boodoll.PageBL;
+using Boodoll.PageBL.ProductSearch;
 using Newtonsoft.Json;
+using System.Configuration;
+using System.Threading;
 
 namespace Instance4Hour
 {
    
 
-    class Program
+    internal class Program
+{
+    // Fields
+    public static List<ob_v_visitreport> allProductName = getAllProductIDName();
+    public static string apiurl = ConfigurationSettings.AppSettings["apiurl"];
+    public static int BeforeHour = int.Parse(ConfigurationSettings.AppSettings["beforeHour"].ToString());
+    public static int intent = int.Parse(ConfigurationSettings.AppSettings["intent"].ToString());
+    public static string token = ConfigurationSettings.AppSettings["token"];
+
+    // Methods
+    public static string createBody(List<UserVisitInfo> u)
     {
-
-        public static  List<ob_v_visitreport> allProductName = getAllProductIDName();
-        public static int BeforeHour = int.Parse(System.Configuration.ConfigurationSettings.AppSettings["beforeHour"].ToString());
-        public static int intent = 30;
-
-        public static void getVisitByHour()
+        string bd = "<html><body><H3>" + Math.Abs(BeforeHour) + "小时内数据报表click.muyingzhijia.com</H3>";
+        List<string> cateNames = (from c in u select c.Catename).Distinct<string>().ToList<string>();
+        for (int i = 0; i < cateNames.Count; i++)
         {
-            string writeFile = string.Format("{0}\\result{1}.txt", System.Threading.Thread.GetDomain().BaseDirectory, DateTime.Now.ToFileTimeUtc().ToString());
-         
-            Dictionary<string, string> productVisit = new Dictionary<string, string>();
-            for (int run = BeforeHour; run < 0; run++)
+            string head = " <H3>" + cateNames[i] + "</H3><table border = 1>   <tr>     <th> 会员号 </th> <th>手机号  </th><th> 浏览商品 </th>  <th> 浏览时间</th></tr>";
+            foreach (UserVisitInfo a in from c in u
+                where c.Catename == cateNames[i]
+                select c)
             {
-                string dtStr = DateTime.Now.AddDays(run).ToShortDateString();
-                string url = "http://10.0.0.131:920/index.php?module=API&method=VisitTime.getVisitInformationPerServerTime&format=JSON&idSite=1&period=day&date="+dtStr+"&expanded=1&idGoal=ecommerceOrder&filter_limit=1000&token_auth=453170c79e8f0ad5dcd1f0b2ce1ecf23";
-
-
-                string xml = Boodoll.PageBL.ProductSearch.ProductSearchBLL.GetHtml(url, Encoding.GetEncoding("GB2312"));
-                xml = xml.Replace("\\u", "\\\\u");
-                       Newtonsoft.Json.JavaScriptArray jsonObject = (Newtonsoft.Json.JavaScriptArray)Newtonsoft.Json.JavaScriptConvert.DeserializeObject(xml);
-
-                     int count = jsonObject.Count();
-                     for (int i = 0; i < count; i++)
-                     {
-                         
-                             JavaScriptObject qcount = (JavaScriptObject)jsonObject[i];
-                             string name =dtStr+"--"+UnicodeToString(qcount["label"].ToString());
-
-
-                             productVisit.Add(name, qcount["nb_conversions"].ToString());
-
-                     }
+                string tmp = head;
+                head = tmp + "<tr><td>" + a.Userid + "</td><td>" + a.Mobile + "</td><td>" + a.Url.Replace("'", "") + "</td><td>" + a.LastVisitTime + "</td><td></tr>";
             }
-            writeLog(writeFile,productVisit);
+            head = head + "</table>";
+            bd = bd + head;
+        }
+        return (bd + "</body></html>");
+    }
 
-
-       }
-
-        public static string UnicodeToString(string text)
+    public static string CreatePID(string url)
+    {
+        url = url.ToLower();
+        if (url.Contains(".html"))
         {
-            MatchCollection mc = Regex.Matches(text, "([\\w]+)|(\\\\u([\\w]{4}))");
-            if (mc != null && mc.Count > 0)
+            string Pattern = "[0-9]*.html";
+            MatchCollection Matches = Regex.Matches(url, Pattern, RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase);
+            int i = 0;
+            string[] sUrlList = new string[Matches.Count];
+            foreach (Match match in Matches)
             {
-                StringBuilder sb = new StringBuilder();
-                foreach (Match m2 in mc)
+                int productid = int.Parse(match.Value.Replace(".html", ""));
+                if (Enumerable.Any<ob_v_visitreport>(allProductName, (Func<ob_v_visitreport, bool>)(a => (a.productid == productid))))
                 {
-                    string v = m2.Value;
-                    if (v.StartsWith("\\u"))
+                    Enumerable.FirstOrDefault<ob_v_visitreport>(allProductName, (Func<ob_v_visitreport, bool>)(a => (a.productid == productid)));
+                    sUrlList[i++] = string.Format("{0},{1}", Enumerable.FirstOrDefault<ob_v_visitreport>(allProductName, (Func<ob_v_visitreport, bool>)(a => (a.productid == productid))).productName, Enumerable.FirstOrDefault<ob_v_visitreport>(allProductName, (Func<ob_v_visitreport, bool>)(a => (a.productid == productid))).category);
+                }
+            }
+
+            return string.Join(",", sUrlList);
+        }
+        return "";
+    }
+
+    public static void CreateReport(List<UserVisitInfo> au)
+    {
+        string title = Math.Abs(BeforeHour) + "小时内数据报表click.muyingzhijia.com";
+        List<UserVisitInfo> u1 = (from c in au
+            where c.Catename == "合生元"
+            select c).ToList<UserVisitInfo>();
+        List<UserVisitInfo> u2 = (from c in au
+            where !Enumerable.Any<UserVisitInfo>(u1, (Func<UserVisitInfo, bool>) (u => (u.Userid == c.Userid)))
+            select c).ToList<UserVisitInfo>();
+        List<string> sendto1 = ConfigurationSettings.AppSettings["sendto1"].ToString().Split(new char[] { ';' }).ToList<string>();
+        List<string> sendto2 = ConfigurationSettings.AppSettings["sendto2"].ToString().Split(new char[] { ';' }).ToList<string>();
+        SendMail(sendto1, title, createBody(u1));
+        SendMail(sendto2, title, createBody(u2));
+    }
+
+    public List<string> GetAllOutboundProduct()
+    {
+        return (from c in new offlineBbhomeDataContext().ob_v_visitreports select c.productid.ToString()).ToList<string>();
+    }
+
+    public static List<ob_v_visitreport> getAllProductIDName()
+    {
+        return new offlineBbhomeDataContext().ob_v_visitreports.Distinct<ob_v_visitreport>().ToList<ob_v_visitreport>();
+    }
+
+    public static string getIDName(int type)
+    {
+        switch (type)
+        {
+            case 1:
+                return "童床";
+
+            case 2:
+                return "童车";
+
+            case 3:
+                return "汽车座椅";
+
+            case 4:
+                return "床品";
+
+            case 5:
+                return "值300元以上的玩具";
+
+            case 6:
+                return "吸奶器";
+
+            case 7:
+                return "消毒锅";
+
+            case 8:
+                return "LG地垫";
+
+            case 9:
+                return "法贝儿";
+
+            case 10:
+                return "施巴";
+
+            case 11:
+                return "和光堂";
+        }
+        return "";
+    }
+
+    public static string GetProductCode(int productid)
+    {
+        string productCode = "";
+        HolycaDataContext ctx = new HolycaDataContext();
+        if (Queryable.Any<Pdt_Base_Info>(ctx.Pdt_Base_Infos, p => p.intProductID == productid))
+        {
+            productCode = Queryable.FirstOrDefault<Pdt_Base_Info>(ctx.Pdt_Base_Infos, p => p.intProductID == productid).vchproductcode;
+        }
+        return productCode;
+    }
+
+    public static string getUserInfo(string guid, string usrid)
+    {
+        string result = "";
+        int uid = -1;
+        uid = Converter.ParseInt(usrid, -1);
+        if (uid < 0)
+        {
+            offlineBbhomeDataContext octx = new offlineBbhomeDataContext();
+            if (Queryable.Any<Ga_guidUserID>(octx.Ga_guidUserIDs, c => c.guid == guid))
+            {
+                uid = Queryable.FirstOrDefault<Ga_guidUserID>(octx.Ga_guidUserIDs, c => c.guid == guid).uid;
+            }
+        }
+        if (uid > 0)
+        {
+            base_t_member member = Queryable.FirstOrDefault<base_t_member>(new BbhomeDataContext().base_t_members, b => b.membNo == uid);
+            result = string.Format("{0},{1}", member.userCode, member.mobileTel);
+        }
+        return result;
+    }
+
+    public static void getVisitByHour()
+    {
+        string writeFile = string.Format(@"{0}\result{1}.txt", Thread.GetDomain().BaseDirectory, DateTime.Now.ToFileTimeUtc().ToString());
+        Dictionary<string, string> productVisit = new Dictionary<string, string>();
+        for (int run = BeforeHour; run < 0; run++)
+        {
+            string dtStr = DateTime.Now.AddDays((double) run).ToShortDateString();
+            JavaScriptArray jsonObject = (JavaScriptArray) JavaScriptConvert.DeserializeObject(ProductSearchBLL.GetHtml("http://10.0.0.131:922/index.php?module=API&method=VisitTime.getVisitInformationPerServerTime&format=JSON&idSite=1&period=day&date=" + dtStr + "&expanded=1&idGoal=ecommerceOrder&filter_limit=1000&token_auth=453170c79e8f0ad5dcd1f0b2ce1ecf23", Encoding.GetEncoding("GB2312")).Replace(@"\u", @"\\u"));
+            int count = jsonObject.Count<object>();
+            for (int i = 0; i < count; i++)
+            {
+                JavaScriptObject qcount = (JavaScriptObject) jsonObject[i];
+                string name = dtStr + "--" + UnicodeToString(qcount["label"].ToString());
+                productVisit.Add(name, qcount["nb_conversions"].ToString());
+            }
+        }
+        writeLog(writeFile, productVisit);
+    }
+
+    public static List<string> GetVisitProductByType(int type)
+    {
+        HolycaDataContext ctx = new HolycaDataContext();
+        List<string> tmpProducts = new List<string>();
+        switch (type)
+        {
+            case 1:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where (c.intFirstCategory == 10) && (c.intSecondCategory == 0x40)
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 2:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where (c.intFirstCategory == 10) && (c.intSecondCategory == 0x3e)
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 3:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where (c.intFirstCategory == 10) && (c.intSecondCategory == 0x3f)
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 4:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where (c.intFirstCategory == 2) && (c.intSecondCategory == 0x19)
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 5:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where (c.intFirstCategory == 11) && (c.intScore >= 300)
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 6:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where ((c.intFirstCategory == 6) && (c.intSecondCategory == 40)) && (c.vchProductName.Contains("吸奶器") || c.vchProductName.Contains("吸乳器"))
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 7:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where ((c.intFirstCategory == 6) && (c.intSecondCategory == 0x29)) && (c.vchProductName.Contains("消毒锅") || c.vchProductName.Contains("消毒器"))
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 8:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where ((c.intFirstCategory == 11) && (c.intSecondCategory == 70)) && (c.intBrandID == 0x1bb)
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 9:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where c.intBrandID == 0x256
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 10:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where c.intBrandID == 0x202
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+
+            case 11:
+                return (from c in ctx.Vi_Web_Pdt_Lists
+                    where c.intBrandID == 0x13f
+                    select string.Format("pdtid={0}", c.intProductID)).Distinct<string>().ToList<string>();
+        }
+        return tmpProducts;
+    }
+
+    private static void Main(string[] args)
+    {
+        List<UserVisitInfo> userList = new List<UserVisitInfo>();
+        string writeFile = string.Format(@"{0}\result{1}.txt", Thread.GetDomain().BaseDirectory, DateTime.Now.ToFileTimeUtc().ToString());
+        Console.WriteLine("开始分析数据:");
+        long maxVisitID = 0;
+        string dtStr = DateTime.Now.ToShortDateString();
+        bool exitFlag = false;
+        for (int run = 0; run < 0x7fffffff; run++)
+        {
+            if (exitFlag)
+            {
+                exitFlag = false;
+                break;
+            }
+            string url = string.Format(apiurl, intent, dtStr, token);
+            if (maxVisitID > 0)
+            {
+                url = url + "&maxIdVisit=" + maxVisitID;
+            }
+            JavaScriptArray jsonObject = (JavaScriptArray) JavaScriptConvert.DeserializeObject(ProductSearchBLL.GetHtml(url, Encoding.GetEncoding("GB2312")));
+            int count = jsonObject.Count<object>();
+            for (int i = 0; i < count; i++)
+            {
+                try
+                {
+                    string referrerUrl;
+                    string referrerType;
+                    string message;
+                    JavaScriptObject qcount = (JavaScriptObject) jsonObject[i];
+                    JavaScriptArray actionDetails = (JavaScriptArray) qcount["actionDetails"];
+                    if (i == 0)
                     {
-                        string word = v.Substring(2);
-                        byte[] codes = new byte[2];
-                        int code = Convert.ToInt32(word.Substring(0, 2), 16);
-                        int code2 = Convert.ToInt32(word.Substring(2), 16);
-                        codes[0] = (byte)code2;
-                        codes[1] = (byte)code;
-                        sb.Append(Encoding.Unicode.GetString(codes));
+                        maxVisitID = Convert.ToInt64(qcount["idVisit"]);
                     }
                     else
                     {
-                        sb.Append(v);
+                        maxVisitID = (Convert.ToInt64(qcount["idVisit"]) > maxVisitID) ? maxVisitID : Convert.ToInt64(qcount["idVisit"]);
+                    }
+                    string lastActionDateTime = qcount["serverDate"].ToString() + " " + qcount["serverTimePretty"].ToString();
+                    if (Convert.ToDateTime(lastActionDateTime) < DateTime.Now.AddHours(BeforeHour))
+                    {
+                        exitFlag = true;
+                    }
+                    else
+                    {
+                        referrerUrl = "";
+                        referrerType = "";
+                        if (qcount["referrerUrl"] != null)
+                        {
+                            referrerUrl = qcount["referrerUrl"].ToString();
+                        }
+                        if (qcount["referrerType"] != null)
+                        {
+                            referrerType = qcount["referrerType"].ToString();
+                        }
+                        message = "";
+                        if (actionDetails.Count > 0)
+                        {
+                            string userid = "";
+                            string guid = "";
+                            JavaScriptObject customVariables = null;
+                            try
+                            {
+                                customVariables = (JavaScriptObject) qcount["customVariables"];
+                                userid = new Dictionary<string, object>((JavaScriptObject) new Dictionary<string, object>(customVariables).ElementAt<KeyValuePair<string, object>>(0).Value).ElementAt<KeyValuePair<string, object>>(1).Value.ToString();
+                                guid = new Dictionary<string, object>((JavaScriptObject) new Dictionary<string, object>(customVariables).ElementAt<KeyValuePair<string, object>>(1).Value).ElementAt<KeyValuePair<string, object>>(1).Value.ToString();
+                                message = getUserInfo(guid, userid);
+                            }
+                            catch (Exception)
+                            {
+                                continue;
+                            }
+                            if (!string.IsNullOrEmpty(message))
+                            {
+                                  actionDetails.ForEach(item =>
+                                     {
+
+                                     JavaScriptObject itemobject = (JavaScriptObject) item;
+                                    if (itemobject.Keys.Contains<string>("url") && (itemobject["url"] != null))
+                                    {
+                                        
+                                        string tmpurl = itemobject["url"].ToString().ToLower();
+                                        if (tmpurl.Contains(".html") && allProductName.Any(c => tmpurl.Contains(string.Format("{0}.html",c.productid))))
+                                        {
+                                            UserVisitInfo vinfo = new UserVisitInfo {
+                                                Url = CreatePID(itemobject["url"].ToString())
+                                            };
+                                            if (!string.IsNullOrEmpty(vinfo.Url))
+                                            {
+                                                vinfo.Catename = vinfo.Url.Split(new char[] { ',' })[1];
+                                                vinfo.ReferrerType = referrerType;
+                                                vinfo.Mobile = message.Split(new char[] { ',' })[1];
+                                                vinfo.Userid = message.Split(new char[] { ',' })[0];
+                                                vinfo.Guid = guid;
+                                                vinfo.LastVisitTime = lastActionDateTime;
+                                                vinfo.ReferrerUrl = referrerUrl;
+                                                if (itemobject.Keys.Contains<string>("timeSpent"))
+                                                {
+                                                    vinfo.Spent = Converter.ParseString(itemobject["timeSpent"], "");
+                                                }
+                                                userList.Add(vinfo);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        }
                     }
                 }
-                return sb.ToString();
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            Console.WriteLine(string.Concat(new object[] { dtStr, ",", run, "finish.", maxVisitID, ",", DateTime.Now }));
+        }
+
+        userList = userList.Distinct().OrderByDescending(c => c.Catename).ToList();
+        CreateReport(userList);
+        writeLog(writeFile, userList);
+        Console.WriteLine("数据生成完毕");
+    }
+
+    public static bool SendMail(List<string> lstMail, string subject, string body)
+    {
+        string sendAddress = "mybaby@muyingzhijia.com";
+        string sendPwd = "mybb@)!)";
+        string name = "母婴之家";
+        try
+        {
+            SmtpClient smtp = new SmtpClient {
+                Host = "mail.muyingzhijia.com",
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                Credentials = new NetworkCredential(sendAddress, sendPwd)
+            };
+            MailMessage mail = new MailMessage {
+                From = new MailAddress(sendAddress, name)
+            };
+            if ((lstMail != null) && (lstMail.Count > 0))
+            {
+                foreach (string item in lstMail)
+                {
+                    if (!string.IsNullOrEmpty(item))
+                    {
+                        mail.To.Add(new MailAddress(item));
+                    }
+                }
+            }
+            mail.Subject = subject;
+            mail.Body = body;
+            mail.SubjectEncoding = Encoding.UTF8;
+            mail.BodyEncoding = Encoding.UTF8;
+            mail.IsBodyHtml = true;
+            smtp.Send(mail);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    public static string UnicodeToString(string text)
+    {
+        MatchCollection mc = Regex.Matches(text, @"([\w]+)|(\\u([\w]{4}))");
+        if ((mc == null) || (mc.Count <= 0))
+        {
+            return text;
+        }
+        StringBuilder sb = new StringBuilder();
+        foreach (Match m2 in mc)
+        {
+            string v = m2.Value;
+            if (v.StartsWith(@"\u"))
+            {
+                string word = v.Substring(2);
+                byte[] codes = new byte[2];
+                int code = Convert.ToInt32(word.Substring(0, 2), 0x10);
+                int code2 = Convert.ToInt32(word.Substring(2), 0x10);
+                codes[0] = (byte) code2;
+                codes[1] = (byte) code;
+                sb.Append(Encoding.Unicode.GetString(codes));
             }
             else
             {
-                return text;
+                sb.Append(v);
             }
         }
-        static void Main(string[] args)
-        {
-            //getVisitByHour();
-
-            //return;
-           List<UserVisitInfo> userList = new List<UserVisitInfo>();
-          
-           string writeFile = string.Format("{0}\\result{1}.txt", System.Threading.Thread.GetDomain().BaseDirectory, DateTime.Now.ToFileTimeUtc().ToString());
-            //数据读取完毕退出
-             Console.WriteLine("开始分析数据:");
-
-          
-                 Int64 maxVisitID = 0;
-
-
-                 string dtStr = DateTime.Now.ToShortDateString();
-
-                 bool exitFlag = false;
-                 for (int run = 0; run < int.MaxValue; run++)
-                 {
-                     #region 循环读取数据
-
-                     if (exitFlag)
-                     {
-                         exitFlag = false;
-                         break;
-                     }
-
-                     //filter_limit=200&filter_offset=100
-
-                     int filter_limit = intent*(run+1);
-                     int filter_offset = intent * run;
-
-                     string url = "http://10.0.0.131:920/index.php?module=API&filter_limit=" + filter_limit + "&filter_offset=" + filter_offset + "&method=Live.getLastVisitsDetails&format=json&idSite=1&period=day&date=" + dtStr + "&expanded=1&token_auth=453170c79e8f0ad5dcd1f0b2ce1ecf23";
-
-                     if (maxVisitID > 0)
-                         url = url + "&maxIdVisit=" + maxVisitID;
-
-                     string xml = Boodoll.PageBL.ProductSearch.ProductSearchBLL.GetHtml(url, Encoding.GetEncoding("GB2312"));
-
-                     Newtonsoft.Json.JavaScriptArray jsonObject = (Newtonsoft.Json.JavaScriptArray)Newtonsoft.Json.JavaScriptConvert.DeserializeObject(xml);
-
-                     int count = jsonObject.Count();
-                     for (int i = 0; i < count; i++)
-                     {
-                         try
-                         {
-                             JavaScriptObject qcount = (JavaScriptObject)jsonObject[i];
-                             JavaScriptArray actionDetails = (JavaScriptArray)qcount["actionDetails"];
-
-                             if (i == 0)
-                                 maxVisitID = Convert.ToInt64(qcount["idVisit"]);
-                             else
-                                 maxVisitID = Convert.ToInt64(qcount["idVisit"]) > maxVisitID ? maxVisitID : Convert.ToInt64(qcount["idVisit"]);
-
-                             string lastActionDateTime = qcount["serverDate"].ToString() + " " + qcount["serverTimePretty"].ToString();
-                            
-                                 if (Convert.ToDateTime(lastActionDateTime) <DateTime.Now.AddHours(day))
-                                 {
-                                      exitFlag = true;
-                                     continue;
-
-                                 }
-                           
-                      
-                             string referrerUrl = "";
-
-                             string referrerType = "";
-                             if (qcount["referrerUrl"] != null)
-                                 referrerUrl = qcount["referrerUrl"].ToString();
-
-                             if (qcount["referrerType"] != null)
-                                 referrerType = qcount["referrerType"].ToString();
-
-                             string message = "";
-                             if (actionDetails.Count > 0)
-                             {
-
-
-                                 string userid = "";
-                                 string guid = "";
-                                 JavaScriptObject customVariables = null;
-                                 try
-                                 {
-                                     customVariables = (JavaScriptObject)qcount["customVariables"];
-                                     userid = ((new Dictionary<string, object>(((Newtonsoft.Json.JavaScriptObject)((new Dictionary<string, object>(customVariables)).ElementAt(0).Value)))).ElementAt(1).Value.ToString());
-                                     guid = (new Dictionary<string, object>(((Newtonsoft.Json.JavaScriptObject)((new Dictionary<string, object>(customVariables)).ElementAt(1).Value)))).ElementAt(1).Value.ToString();
-                                     message = getUserInfo(guid, userid);
-                                 }
-                                 catch (Exception ex)
-                                 {
-                                     continue;
-                                 }
-
-                                 if (!string.IsNullOrEmpty(message))
-                                 {
-
-                                     actionDetails.ForEach(item =>
-                                     {
-                                         JavaScriptObject itemobject = (JavaScriptObject)item;
-                                         if (itemobject.Keys.Contains("url") && itemobject["url"] != null)
-                                         {
-                                             string tmpurl = itemobject["url"].ToString().ToLower();
-                                             if (tmpurl.Contains("pdtid=") && allProductName.Any(c => tmpurl.Contains("pdtid=" + c.productid)))
-                                             {
-                                                 UserVisitInfo vinfo = new UserVisitInfo();
-                                                 vinfo.Url = CreatePID(itemobject["url"].ToString());
-                                           
-                                                 if (!string.IsNullOrEmpty(vinfo.Url))
-                                                 {
-                                                     vinfo.Catename = vinfo.Url.Split(',')[1];
-                                                     vinfo.ReferrerType = referrerType;
-                                                     vinfo.Mobile = message.Split(',')[1];
-                                                     vinfo.Userid = message.Split(',')[0];
-                                                     vinfo.Guid = guid;
-                                                     vinfo.LastVisitTime = lastActionDateTime;
-                                                     vinfo.ReferrerUrl = referrerUrl;
-
-                                                     if (itemobject.Keys.Contains("timeSpent"))
-                                                         vinfo.Spent = Converter.ParseString(itemobject["timeSpent"], "");
-
-                                                     userList.Add(vinfo);
-                                                     Console.WriteLine(vinfo.Userid + "," + vinfo.Guid + "," + vinfo.Url + "," + vinfo.ReferrerUrl + "," + vinfo.LastVisitTime);
-                                                 }
-                                             }
-                                         }
-
-                                     });
-
-                                 }
-
-
-
-                             }
-
-
-                         }
-                         catch (Exception ex)
-                         {
-                             continue;
-                             Console.WriteLine(ex.Message);
-                         }
-
-                     }
-
-                     #endregion
-                 }
-            
-            userList = userList.Distinct().OrderByDescending(c=>c.Catename).ToList();
-            CreateReport(userList);
-            writeLog( writeFile,userList);
-            Console.WriteLine("数据生成完毕");
-           
-        }
-
-   
-
-        public static string CreatePID(string url)
-        {
-            
-               url = url.ToLower();
-                string Pattern = "pdtid=[0-9]*"; // @"pdtID";
-                MatchCollection Matches = Regex.Matches(url, Pattern, RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture);
-
-                int i = 0;
-                string[] sUrlList = new string[Matches.Count];
-
-                // 取得匹配项列表
-                foreach (Match match in Matches)
-                {
-                     
-                      string tmpstr = "";
-                     int productid=int.Parse(match.Value.Replace("pdtid=", ""));
-
-                    if(allProductName.Any(a=>a.productid==productid))
-                    {
-                        allProductName.FirstOrDefault(a => a.productid == productid);
-                        sUrlList[i++] = string.Format("{0},{1}", allProductName.FirstOrDefault(a => a.productid == productid).productName, allProductName.FirstOrDefault(a => a.productid == productid).category);
-                    }
-
-                }
-
-                return string.Join(",", sUrlList);          
-        }
-
-
-        public static string getUserInfo(string guid, string usrid)
-        {
-            string result = "";
-            int uid = -1;
-           uid= Converter.ParseInt(usrid, -1);
-
-
-           if (uid < 0)
-           {
-               offlineBbhomeDataContext octx = new offlineBbhomeDataContext();
-               if (octx.Ga_guidUserIDs.Any(c => c.guid == guid))
-               {
-                   uid = octx.Ga_guidUserIDs.FirstOrDefault(c => c.guid == guid).uid;
-               }
-
-
-           }
-
-              if (uid > 0)
-                {
-                    base_t_member member = new BbhomeDataContext().base_t_members.FirstOrDefault(b => b.membNo == uid);
-
-                    result = string.Format("{0},{1}",member.userCode,member.mobileTel);
-                }
-
-            return result;
-        }
-
-
-        public static void CreateReport(List<UserVisitInfo> au)
-        {
-            string title=Math.Abs(day) + "小时内数据报表click.muyingzhijia.com";
-            List<UserVisitInfo> u1 = au.Where(c => c.Catename == "合生元").ToList();
-            List<UserVisitInfo> u2 = au.Where(c => !u1.Any(u => u.Userid == c.Userid)).ToList();
-
-
-            List<string> sendto1 = System.Configuration.ConfigurationSettings.AppSettings["sendto1"].ToString().Split(';').ToList();
-
-            List<string> sendto2 = System.Configuration.ConfigurationSettings.AppSettings["sendto2"].ToString().Split(';').ToList();
-
-            SendMail(sendto1,title , createBody(u1));
-            SendMail(sendto2, title, createBody(u2));
- 
-            //EmailServiceClient esc = new EmailServiceClient();
-            //esc.Open();
-            ////   esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "前一天16:00 到今天9:00数据报表click.muyingzhijia.com", MailTo = ("wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
-            //esc.SendCmail(new WCFService.WcfMail() { Body = body, Subject = "4小时内数据报表click.muyingzhijia.com", MailTo = ("yxw1309@muyingzhijia.com;wm1240@muyingzhijia.com; ws632@muyingzhijia.com; sd211@muyingzhijia.com;porsia@muyingzhijia.com;yxd1279@muyingzhijia.com;wh971@muyingzhijia.com;lyq942@muyingzhijia.com; cfzmp@163.com".Split(new char[] { ',', ';' })), IsHtml = true });
-            //esc.Close();
-
-          
-        }
-
-        public static string createBody(List<UserVisitInfo> u)
-        {
-            string bd = "<html><body><H3>" + Math.Abs(day) + "小时内数据报表click.muyingzhijia.com</H3>";
-            List<string> cateNames = u.Select(c => c.Catename).Distinct().ToList();
-            for (int i = 0; i < cateNames.Count; i++)
-            {
-                string head = " <H3>" + cateNames[i] + "</H3><table border = 1>   <tr>     <th> 会员号 </th> <th>手机号  </th><th> 浏览商品 </th>  <th> 浏览时间</th></tr>";
-                foreach (UserVisitInfo a in u.Where(c => c.Catename == cateNames[i]))
-                {
-                    head += ("<tr><td>" + a.Userid + "</td><td>" + a.Mobile + "</td><td>" + a.Url.Replace("'", "") + "</td><td>" + a.LastVisitTime + "</td><td></tr>");//开始写入值
-
-                }
-                head += "</table>";
-                bd += head;
-            }
-            bd += "</body></html>";
-
-            return bd;
-        }
-
-
-        /// <summary>
-        /// 发送邮件，邮件内容大小无限制，比较灵活，但有可能被163、sin等邮箱屏蔽掉
-        /// </summary>
-        /// <param name="lstMail">邮件体，可多个</param>
-        /// <param name="sendAddress">发送人</param>
-        /// <param name="sendPwd">邮件标题</param>
-        /// <param name="name">名称</param>
-        /// <param name="msg">异常信息</param>
-        /// <returns></returns>
-        public static bool SendMail(List<string> lstMail, string subject, string body)
-        {
-
-            // <add key="sendMail" value="mybaby@muyingzhijia.com,mybaby,mybb@)!),222.66.166.253" />
-            string sendAddress = "mybaby@muyingzhijia.com";
-            string sendPwd = "mybb@)!)";
-            string name = "母婴之家";
-            try
-            {
-                SmtpClient smtp = new SmtpClient();
-                smtp.Host = "mail.muyingzhijia.com";
-                smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                smtp.Credentials = new NetworkCredential(sendAddress, sendPwd);
-
-               
-                        MailMessage mail = new MailMessage();
-                        mail.From = new MailAddress(sendAddress, name);
-
-                        if (lstMail != null && lstMail.Count > 0)
-                        {
-                            foreach (var item in lstMail)
-                            {
-                                if(!string.IsNullOrEmpty(item))
-                                mail.To.Add(new MailAddress(item));
-                            }
-                        }
-                   
-                        mail.Subject = subject;
-                        mail.Body = body;
-                        mail.SubjectEncoding = Encoding.UTF8;
-                        mail.BodyEncoding = Encoding.UTF8;
-                        mail.IsBodyHtml = true;
-                        smtp.Send(mail);
-
-                        return true;
-            }
-            catch (Exception ex)
-            {
-               
-                return false;
-            }
-        }
-
-        public static void writeLog(string writeFile,Dictionary<string,string> u)
-        {
-            try
-            {
-                FileStream fs = new FileStream(writeFile, FileMode.OpenOrCreate, FileAccess.Write);
-                StreamWriter wr = new StreamWriter(fs);
-
-                foreach (KeyValuePair<string,string> a in u)
-                {
-                    wr.WriteLine(a.Key + "," + a.Value);//开始写入值
-
-
-                }
-                wr.Flush();
-
-                wr.Close();
-                fs.Close();
-            }
-            catch
-            { }
-        }
-
-
-
-        public static void writeLog(string writeFile,List<UserVisitInfo> u)
-        {
-            try
-            {
-                FileStream fs = new FileStream(writeFile, FileMode.OpenOrCreate, FileAccess.Write);
-                StreamWriter wr = new StreamWriter(fs);
-
-                foreach (UserVisitInfo a in u)
-                {
-                    wr.WriteLine(a.Userid + "," +a.Mobile + "," + a.Url + "," + a.LastVisitTime);//开始写入值
-
-         
-                }
-                wr.Flush();
-
-                wr.Close();
-                fs.Close();
-            }
-            catch
-            { }
-        }
-
-        public static List<ob_v_visitreport> getAllProductIDName()
-        {
-               return new offlineBbhomeDataContext().ob_v_visitreports.Distinct().ToList();
-       
-             //var q=new offlineBbhomeDataContext().ob_v_visitreports.Distinct().ToList();
-         
-             //  Dictionary<int, string> dics = new Dictionary<int, string>();
-
-             //  q.ForEach(c =>
-             //      {
-             //          if(!dics.Keys.Contains(c.productid))
-             //          dics.Add( c.productid,c.productName);
-             //      }
-             //      );
-             //  return dics;
-             
-        }
-
-        public static string getIDName(int type)
-        {
-    
-            switch (type)
-            {
-                ///童床 10 and cateId2=64
-                case 1:
-                    return "童床";
-                    break;
-                // 童车
-                case 2:
-                    return "童车"; break;
-
-                // 汽车座椅
-                case 3:
-                    return "汽车座椅"; break;
-                //床品
-                case 4:
-                    return "床品"; break;
-
-                //值300元以上的玩具
-                case 5:
-                    return "值300元以上的玩具"; break;
-                //吸奶器  cateId1=6 and cateId2=40 and (productName like '%吸奶器%' or productName like '%吸乳器%'
-                case 6:
-                    return "吸奶器"; break;
-
-                //消毒锅 cateId1=6 and cateId2=41 and (productName like '%消毒锅%' or productName like '%消毒器%')
-                case 7:
-                    return "消毒锅"; break;
-
-                //LG地垫cateId1=11 and cateId2=70 and brandid=443
-                case 8:
-                    return "LG地垫"; break;
-
-                //法贝儿 brandid=598
-                case 9:
-                    return "法贝儿"; break;
-
-                //施巴 brandid=514 
-                case 10:
-                    return "施巴"; break;
-
-                //和光堂 brandid=319 
-                case 11:
-                    return "和光堂"; break;
-
-                default:
-
-                    break;
-
-
-            }
-
-
-            return "";
-        }
-
-
-        public List<string> GetAllOutboundProduct()
-        {
-            return new offlineBbhomeDataContext().ob_v_visitreports.Select(c => c.productid.ToString()).ToList();
-        }
-
-
-
-        public static List<string> GetVisitProductByType(int type)
-        {
-            HolycaDataContext ctx=new HolycaDataContext();
-
-
-            List<string> tmpProducts = new List<string>();
-            
-            switch(type)
-            {
-                ///童床 10 and cateId2=64
-                case 1:
-                 tmpProducts=ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 10 && c.intSecondCategory == 64).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-                    // 童车
-                case 2:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 10 && c.intSecondCategory == 62).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                // 汽车座椅
-                case 3:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 10 && c.intSecondCategory == 63).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                //床品
-                case 4:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 2 && c.intSecondCategory == 25).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-                
-                //值300元以上的玩具
-                case 5:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 11 && c.intScore > 300).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-                //吸奶器  cateId1=6 and cateId2=40 and (productName like '%吸奶器%' or productName like '%吸乳器%'
-                case 6:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 6 && c.intSecondCategory == 40 && (c.vchProductName.Contains("吸奶器") || c.vchProductName.Contains("吸乳器"))).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                //消毒锅 cateId1=6 and cateId2=41 and (productName like '%消毒锅%' or productName like '%消毒器%')
-                case 7:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 6 && c.intSecondCategory == 41 && (c.vchProductName.Contains("消毒锅") || c.vchProductName.Contains("消毒器"))).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                //LG地垫cateId1=11 and cateId2=70 and brandid=443
-                case 8:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intFirstCategory == 11 && c.intSecondCategory == 70 && c.intBrandID == 443).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                //法贝儿 brandid=598
-                case 9:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intBrandID == 598).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                //施巴 brandid=514 
-                case 10:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intBrandID == 514).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                //和光堂 brandid=319 
-                case 11:
-                 tmpProducts = ctx.Vi_Web_Pdt_Lists.Where(c => c.intBrandID == 319).Select(c => string.Format("pdtid={0}", c.intProductID)).Distinct().ToList();
-                 break;
-
-                default:
-
-                 break;
-           
-
-             }
-
-
-            return tmpProducts;
-        }
-
-        public static string GetProductCode(int productid)
-        {
-            
-            string productCode = "";
-            HolycaDataContext ctx = new HolycaDataContext();
-            if (ctx.Pdt_Base_Infos.Any(p => p.intProductID == productid))
-            {
-                productCode = ctx.Pdt_Base_Infos.FirstOrDefault(p => p.intProductID == productid).vchproductcode;
-
-            }
-
-            return productCode;
-        }
-
+        return sb.ToString();
     }
+
+    public static void writeLog(string writeFile, Dictionary<string, string> u)
+    {
+        try
+        {
+            FileStream fs = new FileStream(writeFile, FileMode.OpenOrCreate, FileAccess.Write);
+            StreamWriter wr = new StreamWriter(fs);
+            foreach (KeyValuePair<string, string> a in u)
+            {
+                wr.WriteLine(a.Key + "," + a.Value);
+            }
+            wr.Flush();
+            wr.Close();
+            fs.Close();
+        }
+        catch
+        {
+        }
+    }
+
+    public static void writeLog(string writeFile, List<UserVisitInfo> u)
+    {
+        try
+        {
+            FileStream fs = new FileStream(writeFile, FileMode.OpenOrCreate, FileAccess.Write);
+            StreamWriter wr = new StreamWriter(fs);
+            foreach (UserVisitInfo a in u)
+            {
+                wr.WriteLine(a.Userid + "," + a.Mobile + "," + a.Url + "," + a.LastVisitTime);
+            }
+            wr.Flush();
+            wr.Close();
+            fs.Close();
+        }
+        catch
+        {
+        }
+    }
+}
+
+ 
+
 }
