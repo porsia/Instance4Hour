@@ -12,6 +12,7 @@ using Boodoll.PageBL.ProductSearch;
 using Newtonsoft.Json;
 using System.Configuration;
 using System.Threading;
+using System.Xml;
 
 namespace Instance4Hour
 {
@@ -20,7 +21,7 @@ namespace Instance4Hour
     internal class Program
 {
     // Fields
-    public static List<ob_v_visitreport> allProductName = getAllProductIDName();
+        public static List<ob_v_visitreport> allProductName = Xml();
     public static string apiurl = ConfigurationSettings.AppSettings["apiurl"];
     public static int BeforeHour = int.Parse(ConfigurationSettings.AppSettings["beforeHour"].ToString());
     public static int intent = int.Parse(ConfigurationSettings.AppSettings["intent"].ToString());
@@ -373,6 +374,40 @@ namespace Instance4Hour
         CreateReport(userList);
         writeLog(writeFile, userList);
         Console.WriteLine("数据生成完毕");
+    }
+
+
+    public static List<ob_v_visitreport> Xml()
+    {
+        List<ob_v_visitreport> list = new List<ob_v_visitreport>();
+        //创建XmlDocument对象
+        XmlDocument xmlDoc = new XmlDocument();
+        string filen = System.Environment.CurrentDirectory + ("/Product.xml");
+        //载入xml文件名
+        xmlDoc.Load(filen);
+        //读取根节点的所有子节点，放到xn0中 
+        XmlNodeList xn0 = xmlDoc.SelectSingleNode("DirectoryListing").ChildNodes;
+        //查找二级节点的内容或属性 
+        foreach (XmlElement oon in xn0)
+        {
+            ob_v_visitreport ser = new ob_v_visitreport();
+            ser.category = oon.GetElementsByTagName("category")[0].InnerText;
+            ser.productid = Convert.ToInt32(oon.GetElementsByTagName("productid")[0].InnerText);
+            ser.productName = oon.GetElementsByTagName("productname")[0].InnerText;
+
+            list.Add(ser);
+        }
+        return list;
+    }
+
+    [Serializable]
+    public class Serveris
+    {
+        public Serveris() { }
+        public string Category { get; set; }
+        public int Productid { get; set; }
+        public string Productname { get; set; }
+
     }
 
     public static bool SendMail(List<string> lstMail, string subject, string body)
